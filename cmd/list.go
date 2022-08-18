@@ -24,6 +24,7 @@ func NewCmdList() *cobra.Command {
 		Use:   "list",
 		Short: "Lists the issues",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SilenceUsage = true
 			if len(args) != 0 {
 				return fmt.Errorf(fmt.Sprintf("Invalid argument(s). Expected 0 received %d", len(args)))
 			}
