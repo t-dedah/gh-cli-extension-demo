@@ -516,3 +516,56 @@ func PrintPendingMocks(mocks []gock.Mock) string {
 }
 
 ```
+
+## Stage 4
+Last stage of the demo is to know how to release the newly created extension.
+
+1. For releasing we use `cli/gh-extension-precompile@v1` workflow which builds binary for all the major platforms like linux, windows, darwin and many more
+
+Sample workflow to test and release
+```
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go 1.18
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+      
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Restore Go modules cache
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('go.mod') }}
+          restore-keys: |
+            go-${{ runner.os }}-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v ./...
+        env:
+          GH_TOKEN: dummy-token-to-facilitate-rest-client
+
+      - uses: cli/gh-extension-precompile@v1
+        with:
+          go_version: "1.18"
+```
+
+2. Add `gh-extension` topic to the repo for more visibility
+
