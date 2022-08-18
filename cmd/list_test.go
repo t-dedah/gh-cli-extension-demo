@@ -11,6 +11,41 @@ import (
 	"gopkg.in/h2non/gock.v1"
 )
 
+func TestListWithIncorrectArguments(t *testing.T) {
+	t.Cleanup(gock.Off)
+	cmd := NewCmdList()
+	cmd.SetArgs([]string{"INCORRECT"})
+	err := cmd.Execute()
+
+	assert.NotNil(t, err)
+	assert.Equal(t, err, fmt.Errorf("Invalid argument(s). Expected 0 received 1"))
+}
+
+func TestListWithSuccess(t *testing.T) {
+	t.Cleanup(gock.Off)
+	gock.New("https://api.github.com").
+		Get("/repos/testOrg/testRepo/actions/runs").
+		Reply(200).
+		JSON(`{
+			"total_count":1,
+			"workflow_runs":[
+				{
+					"id":1,
+					"name":"Test Workflow",
+					"status":"queued"
+				}
+			]
+		}`)
+
+	cmd := NewCmdList()
+	cmd.SetArgs([]string{"-R", "testOrg/testRepo"})
+	err := cmd.Execute()
+
+	assert.Nil(t, err)
+
+	assert.True(t, gock.IsDone(), PrintPendingMocks(gock.Pending()))
+}
+
 func TestListWithInternalServerError(t *testing.T) {
 	t.Cleanup(gock.Off)
 	gock.New("https://api.github.com").

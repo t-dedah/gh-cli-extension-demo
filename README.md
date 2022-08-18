@@ -6,6 +6,7 @@ This repo is part of a demo where we learn how to create an extension for gh-cli
 ## Libraries Used
 1. [go-gh](https://github.com/cli/go-gh) - A Go module for interacting with gh and the GitHub API from the command line.
 2. [Cobra](https://github.com/spf13/cobra) - It is a library used giving structure and managing inputs in our cli
+3. [Gock](https://github.com/h2non/gock) - HTTP traffic mocking and testing library
 
 
 ## Development Setup
@@ -364,3 +365,154 @@ type WorkflowRun struct {
 ```
 
 3. Build and test
+
+## Stage 3
+In this stage we learn how to:-
+1. Add tests
+2. Mock api calls
+
+**A. Install packages**
+1. go get github.com/stretchr/testify/assert
+2. go get gopkg.in/h2non/gock.v1
+
+**B. Create test file**
+1. Create a new file with name `list_test.go` in cmd folder.
+2. Add first basic test
+
+```
+package cmd
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"gopkg.in/h2non/gock.v1"
+)
+
+func TestListWithIncorrectArguments(t *testing.T) {
+	t.Cleanup(gock.Off)
+	cmd := NewCmdList()
+	cmd.SetArgs([]string{"INCORRECT"})
+	err := cmd.Execute()
+
+	assert.NotNil(t, err)
+	assert.Equal(t, err, fmt.Errorf("Invalid argument(s). Expected 0 received 1"))
+}
+```
+
+This test checks if the error being throw is correct or not.
+
+**C. Test API calls**
+Now we will mock the api calls using gock package.
+
+final list_test.go
+
+```
+package cmd
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/cli/go-gh/pkg/api"
+	"gopkg.in/h2non/gock.v1"
+)
+
+func TestListWithIncorrectArguments(t *testing.T) {
+	t.Cleanup(gock.Off)
+	cmd := NewCmdList()
+	cmd.SetArgs([]string{"INCORRECT"})
+	err := cmd.Execute()
+
+	assert.NotNil(t, err)
+	assert.Equal(t, err, fmt.Errorf("Invalid argument(s). Expected 0 received 1"))
+}
+
+func TestListWithSuccess(t *testing.T) {
+	t.Cleanup(gock.Off)
+	gock.New("https://api.github.com").
+		Get("/repos/testOrg/testRepo/actions/runs").
+		Reply(200).
+		JSON(`{
+			"total_count":1,
+			"workflow_runs":[
+				{
+					"id":1,
+					"name":"Test Workflow",
+					"status":"queued"
+				}
+			]
+		}`)
+
+	cmd := NewCmdList()
+	cmd.SetArgs([]string{"-R", "testOrg/testRepo"})
+	err := cmd.Execute()
+
+	assert.Nil(t, err)
+
+	assert.True(t, gock.IsDone(), PrintPendingMocks(gock.Pending()))
+}
+
+func TestListWithInternalServerError(t *testing.T) {
+	t.Cleanup(gock.Off)
+	gock.New("https://api.github.com").
+		Get("/repos/testOrg/testRepo/actions/runs").
+		Reply(500).
+		JSON(`{
+			"message": "Internal Server Error",
+			"documentation_url": "https://docs.github.com/rest/reference/actions#get-github-actions-cache-list-for-a-repository"
+		}`)
+
+	cmd := NewCmdList()
+	cmd.SetArgs([]string{"-R", "testOrg/testRepo"})
+	err := cmd.Execute()
+
+	assert.NotNil(t, err)
+
+	var httpError api.HTTPError
+	errors.As(err, &httpError)
+	assert.Equal(t, httpError.StatusCode, 500)
+
+	assert.True(t, gock.IsDone(), PrintPendingMocks(gock.Pending()))
+}
+
+func TestListWithPendingMocks(t *testing.T) {
+	t.Cleanup(gock.Off)
+	gock.New("https://api.github.com").
+		Get("/repos/testOrg/testRepo/actions/runs/xyz").
+		Reply(500).
+		JSON(`{
+			"message": "Internal Server Error",
+			"documentation_url": "https://docs.github.com/rest/reference/actions#get-github-actions-cache-list-for-a-repository"
+		}`)
+
+	gock.New("https://api.github.com").
+		Get("/repos/testOrg/testRepo/actions/runs").
+		Reply(500).
+		JSON(`{
+			"message": "Internal Server Error",
+			"documentation_url": "https://docs.github.com/rest/reference/actions#get-github-actions-cache-list-for-a-repository"
+		}`)
+
+	cmd := NewCmdList()
+	cmd.SetArgs([]string{"-R", "testOrg/testRepo"})
+	err := cmd.Execute()
+
+	assert.NotNil(t, err)
+
+	assert.False(t, gock.IsDone(), PrintPendingMocks(gock.Pending()))
+}
+
+func PrintPendingMocks(mocks []gock.Mock) string {
+	paths := []string{}
+	for _, mock := range mocks {
+		paths = append(paths, mock.Request().URLStruct.String())
+	}
+	return fmt.Sprintf("%d unmatched mocks: %s", len(paths), strings.Join(paths, ", "))
+}
+
+```
