@@ -17,6 +17,12 @@ This repo is part of a demo where we learn how to create an extension for gh-cli
 
 ## Stage 1
 
+In this stage we:-
+
+    1. Create a basic extension 
+    2. properly structure the folder structure
+    3. run our extension
+
 **A. Create extension** 
 		
 		gh extension create --precompiled=go <extension-name-excluding-gh>
